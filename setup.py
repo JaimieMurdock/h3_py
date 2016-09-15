@@ -25,5 +25,5 @@ setuptools.setup(
             ],
         },
         data_files=[(
-            'config',['config.yaml'])
+            'config',['config/config.yaml'])
         ])
