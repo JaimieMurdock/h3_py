@@ -20,7 +20,7 @@ def main():
 
 def cycle_running_crawl(url):
 	config_path = h3.get_config_path(url)
-	if !os.access(config_path, os.R_OK) or !os.access(config_path, os.W_OK):
+	if not os.access(config_path, os.R_OK) or not os.access(config_path, os.W_OK):
 		print("Cannot access crawler config {}".format(config_path))
 		return False
 		

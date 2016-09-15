@@ -28,6 +28,7 @@ except AttributeError:
 
 
 class Crawl_Status():
+	none = "None"
 	unbuilt = "Unbuilt"
 	ready = "Ready"
 	paused = "Active: PAUSED"
