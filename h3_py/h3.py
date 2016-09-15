@@ -12,7 +12,7 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
 
 
-with open("config.yaml") as f:
+with open("config/config.yaml") as f:
 	config = yaml.load(f)
 
 # Silence self signed certificate security warning

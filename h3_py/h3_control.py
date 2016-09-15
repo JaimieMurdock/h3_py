@@ -1,4 +1,4 @@
-import h3
+import h3_py.h3 as h3
 import os
 import sys
 import argparse

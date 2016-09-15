@@ -23,4 +23,7 @@ setuptools.setup(
             'console_scripts': [
                 'h3_control=h3_py.h3_control:main',
             ],
-        })
+        },
+        data_files=[(
+            'config',['config.yaml'])
+        ])
