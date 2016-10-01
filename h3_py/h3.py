@@ -5,13 +5,14 @@ import time
 import enum
 import sys
 import re
+import logging
 from requests.auth import HTTPDigestAuth
 from requests.auth import HTTPBasicAuth
 from lxml import etree as ET
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
 
-
+logger = logging.getLogger(__name__)
 with open("config/config.yaml") as f:
 	config = yaml.load(f)
 
@@ -95,10 +96,21 @@ def increment_crawl_number(url, source_config_file, dest_config_file):
 	config_tree.getroot().findall("./beans:bean[@id='simpleOverrides']/beans:property/beans:value",ns)[0].text = properties_incremented
 	config_tree.write(dest_config_file,xml_declaration=True,encoding="utf-8")
 
+def find_replace_xpath(url, source_config_file, dest_config_file, xpath, regex, replacement):
+	parser = ET.XMLParser(remove_comments=False)
+	config_tree = ET.parse(source_config_file,parser=parser)
+	ns = {'beans': 'http://www.springframework.org/schema/beans'}
+	config_field = config_tree.getroot().findall(xpath,ns)[0].text
+	#print(config_field)
+	modified_field = re.sub(re.compile(regex,re.MULTILINE),replacement,config_field)
+	#print(modified_field)
+	config_tree.getroot().findall(xpath,ns)[0].text=modified_field
+	config_tree.write(dest_config_file,xml_declaration=True,encoding="utf-8")
+
 def test_full_cycle(url):
 
 	status = get_crawl_status(url)
-	print("Status: %s" %status)
+	logger.info("Status: %s" %status)
 	available_actions = get_available_actions(url)
 	if status == Crawl_Status.unbuilt and "build" in available_actions:
 		build(url)
@@ -141,18 +153,18 @@ def test_full_cycle(url):
 		teardown(url)
 
 def do_crawl_action_until_status(url, action, expected_status):
+	logger.info("-Doing action: %s" %action)
 	response = send_command(url,{"action":action})
 	if (response.status_code & 200) == 200:
-		print("-Doing action: %s" %action)
 		retries=0
 		while get_crawl_status(url) != expected_status:
 			if retries > config["max_retries"]:
-				print("Max retries exceeded while waiting for: %s" % expected_status)
+				logger.info("Max retries exceeded while waiting for: %s" % expected_status)
 				sys.exit()
-			print("...")
+			logger.info("...")
 			time.sleep(config["retry_delay_seconds"])
 			retries+=1
-		print("Status: %s" %expected_status)
+		logger.error("Status: %s" %expected_status)
 
 def build(url):
 	do_crawl_action_until_status(url, Crawl_Actions.build, Crawl_Status.ready)
@@ -179,7 +191,7 @@ def runScript(url, script):
 	response = send_command(url + '/script',{'engine':'groovy','script':script})
 	if (response.status_code & 200) == 200:
 
-		#print(response.text)
+		logger.debug(response.text)
 		root = ET.fromstring(response.text)
 		return_script = root.find('script')
 		raw_out = root.find('rawOutput')
@@ -187,13 +199,13 @@ def runScript(url, script):
 		lines_executed = root.find('linesExecuted')
 
 		if return_script is not None:
-			print("Script run: %s" % return_script.text)
+			logger.info("Script run: %s" % return_script.text)
 		if lines_executed is not None:
-			print("%s lines executed" % lines_executed.text)
+			logger.info("%s lines executed" % lines_executed.text)
 		if raw_out is not None:
-			print("Output:\n %s" % raw_out.text)
+			logger.info("Output:\n %s" % raw_out.text)
 		if html_out is not None:
-			print("Output:\n %s" % html_out.text)
+			logger.info("Output:\n %s" % html_out.text)
 
 
 
