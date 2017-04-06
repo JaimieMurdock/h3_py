@@ -6,10 +6,13 @@ import enum
 import sys
 import re
 import logging
+import ssl
 from requests.auth import HTTPDigestAuth
 from requests.auth import HTTPBasicAuth
 from lxml import etree as ET
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.poolmanager import PoolManager
 
 
 logger = logging.getLogger(__name__)
@@ -26,6 +29,17 @@ try:
 except AttributeError:
     # no pyopenssl support used / needed / available
     pass
+
+class Ssl3HttpAdapter(HTTPAdapter):
+    """"Transport adapter" that allows us to use SSLv3."""
+
+    def init_poolmanager(self, connections, maxsize, block=False):
+        self.poolmanager = PoolManager(
+            num_pools=connections, maxsize=maxsize,
+            block=block, ssl_version=ssl.PROTOCOL_SSLv3)
+
+session = requests.Session()
+session.mount('https://wbgrp-crawl',Ssl3HttpAdapter())
 
 
 class Crawl_Status():
@@ -45,9 +59,20 @@ class Crawl_Actions():
 	terminate = "terminate"
 	teardown = "teardown"
 
+class Crawl_Reports():
+	summary = "CrawlSummaryReport"
+	seeds = "SeedsReport"
+	source = "SourceTagsReport"
+	hosts = "HostsReport"
+	mime = "MimetypesReport"
+	response = "ResponseCodeReport"
+	processors = "ProcessorsReport"
+	frontier = "FrontierSummaryReport"
+	thread = "ToeThreadsReport"
+
 
 def get_crawl_status(url):
-	response = requests.get(url,auth=HTTPDigestAuth(config["h3_settings"]["username"],config["h3_settings"]["password"]),verify=False, headers= {'accept':'application/xml'})
+	response = session.get(url,auth=HTTPDigestAuth(config["h3_settings"]["username"],config["h3_settings"]["password"]),verify=False, headers= {'accept':'application/xml'})
 	if (response.status_code & 200) == 200:
 		root=ET.fromstring(response.text)
 
@@ -57,7 +82,7 @@ def get_crawl_status(url):
 			return root.find('crawlControllerState').text
 
 def get_available_actions(url):
-	response = requests.get(url,auth=HTTPDigestAuth(config["h3_settings"]["username"],config["h3_settings"]["password"]),verify=False, headers= {'accept':'application/xml'})
+	response = session.get(url,auth=HTTPDigestAuth(config["h3_settings"]["username"],config["h3_settings"]["password"]),verify=False, headers= {'accept':'application/xml'})
 	actions = []
 	if (response.status_code & 200) == 200:
 		root=ET.fromstring(response.text)
@@ -71,7 +96,12 @@ def main():
 	test_full_cycle(url)
 
 def get_crawljob_page(url):
-	response = requests.get(url,auth=HTTPDigestAuth(config["h3_settings"]["username"],config["h3_settings"]["password"]),verify=False, headers= {'accept':'application/xml'})
+	response = session.get(url,auth=HTTPDigestAuth(config["h3_settings"]["username"],config["h3_settings"]["password"]),verify=False, headers= {'accept':'application/xml'})
+	if (response.status_code & 200) == 200:
+		return response
+
+def get_crawljob_text_page(url):
+	response = requests.get(url,auth=HTTPDigestAuth(config["h3_settings"]["username"],config["h3_settings"]["password"]),verify=False)
 	if (response.status_code & 200) == 200:
 		return response
 
@@ -210,7 +240,7 @@ def runScript(url, script):
 
 
 def send_command(url, data):
-	response = requests.post(url,data=data,auth=HTTPDigestAuth(config["h3_settings"]["username"],config["h3_settings"]["password"]),verify=False, headers= {'accept':'application/xml'})
+	response = session.post(url,data=data,auth=HTTPDigestAuth(config["h3_settings"]["username"],config["h3_settings"]["password"]),verify=False, headers= {'accept':'application/xml'})
 	return response
 
 if __name__ == "__main__":

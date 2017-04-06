@@ -11,12 +11,15 @@ logger = logging.getLogger(__name__)
 def main():
 	parser = argparse.ArgumentParser(description='Control an instance of Heritrix 3')
 	parser.add_argument('url', help='URL for the crawl job. Ex. https://localhost:6440/engine/job/testcrawl')
-	parser.add_argument('action', choices=['start','stop','increment','cycle'])
+	parser.add_argument('action', choices=['status','start','stop','pause','unpause','checkpoint','increment','cycle', 'report_hosts', 'report_threads'])
 	parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
 	parser.add_argument("--config_find_replace", action="append", help="json object containing xpath, regex, replacement to apply to the crawler config. ex: {'xpath':'./beans:bean[@id='simpleOverrides']/beans:property/beans:value','regex':'^myValue=.*$', 'replacement':'myValue=new_value'}")
 
 	args = parser.parse_args()
 	ret_val = True
+
+	if args.action=='status':
+		print(h3.get_crawl_status(args.url))
 	
 	if args.action=='start':
 		if(args.config_find_replace):
@@ -33,6 +36,24 @@ def main():
 		logger.error("problem stopping")
 		sys.exit(-1)
 
+	if args.action=='pause':
+		ret_val=pause_running_crawl(args.url)
+	if not ret_val:
+		logger.error("problem pausing")
+		sys.exit(-1)
+
+	if args.action=='unpause':
+		ret_val=unpause_paused_crawl(args.url)
+	if not ret_val:
+		logger.error("problem unpausing")
+		sys.exit(-1)
+
+	if args.action=='checkpoint':
+		ret_val=checkpoint_paused_crawl(args.url)
+	if not ret_val:
+		logger.error("problem checkpointing")
+		sys.exit(-1)
+
 	if args.action=='increment':
 		ret_val=cycle_crawl_config(args.url)
 	if not ret_val:
@@ -44,6 +65,12 @@ def main():
 	if not ret_val:
 		logger.error("problem cycling the crawl")
 		sys.exit(-1)
+
+	if args.action=='report_hosts':
+		ret_val = get_report(args.url,h3.Crawl_Reports.hosts)
+
+	if args.action=='report_threads':
+		ret_val = get_report(args.url,h3.Crawl_Reports.thread)
 
 def cycle_running_crawl(url):
 	config_path = h3.get_config_path(url)
@@ -96,6 +123,55 @@ def stop_running_crawl(url):
 		return True
 	return False
 
+def pause_running_crawl(url):
+	status = h3.get_crawl_status(url)
+	available_actions = h3.get_available_actions(url)
+	logger.info("Status: %s" %status)
+	if status != h3.Crawl_Status.running:
+		logger.error("Expected status {0}, found {1}".format(h3.Crawl_Status.running, status))
+		return
+	if status == h3.Crawl_Status.running and "pause" in available_actions:
+		h3.pause(url)
+		status = h3.get_crawl_status(url)
+		available_actions = h3.get_available_actions(url)
+	if status == h3.Crawl_Status.paused:
+		logger.info("Crawl Paused")
+		return True
+	return False
+
+def unpause_paused_crawl(url):
+	status = h3.get_crawl_status(url)
+	available_actions = h3.get_available_actions(url)
+	logger.info("Status: %s" %status)
+	if status != h3.Crawl_Status.paused:
+		logger.error("Expected status {0}, found {1}".format(h3.Crawl_Status.paused, status))
+		return
+	if status == h3.Crawl_Status.paused and "unpause" in available_actions:
+		h3.unpause(url)
+		status = h3.get_crawl_status(url)
+		available_actions = h3.get_available_actions(url)
+	if status == h3.Crawl_Status.running:
+		logger.info("Crawl Running")
+		return True
+	return False
+
+def checkpoint_paused_crawl(url):
+	status = h3.get_crawl_status(url)
+	available_actions = h3.get_available_actions(url)
+	logger.info("Status: %s" %status)
+	if status != h3.Crawl_Status.paused:
+		logger.error("Expected status {0}, found {2}".format(h3.Crawl_Status.paused, status))
+		return
+	if status == h3.Crawl_Status.paused and "checkpoint" in available_actions:
+		h3.checkpoint(url)
+		status = h3.get_crawl_status(url)
+		available_actions = h3.get_available_actions(url)
+	if status == h3.Crawl_Status.paused:
+		logger.info("Crawl Checkpointed")
+		return True
+	return False
+
+
 def cycle_crawl_config(url):
 	status = h3.get_crawl_status(url)
 	available_actions = h3.get_available_actions(url)
@@ -139,6 +215,11 @@ def build_and_start_crawl(url):
 		logger.info("Crawl Started")
 		return True
 	return False
+
+def get_report(url,report):
+	report_url = url+"/report/"+report
+	response = h3.get_crawljob_text_page(report_url)
+	return True
 
 if __name__ == "__main__":
 	main()
